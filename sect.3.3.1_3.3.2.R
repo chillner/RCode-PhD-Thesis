@@ -1,5 +1,5 @@
 ###################################################
-#Single stage designs PWER-control (Section 4.2)
+#Single stage designs PWER-control (Sections 3.3.1 and 3.3.2)
 ###################################################
 library(multcomp)
 
