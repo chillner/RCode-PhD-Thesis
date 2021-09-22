@@ -1,10 +1,12 @@
-############################
-#Design objects:
-############################
+#########################################################################################################
+#Some help functions and general functions to find correlation matrix and critical values of a GSD
+#########################################################################################################
 library(multcomp)
 library(gtools)
 
+#####################
 #help functions:
+#####################
 getPops <- function(object){
   return(union(colnames(object$n),colnames(object$test)))
 }
@@ -207,7 +209,14 @@ design <- function(m, I, K){
   
 }
 
+################################
 #Correlation matrix function
+#################################
+#object: List consisting of
+#- a vector of pi-values pi_J, J in C_P, with names
+#- matrix of sample size values n_J^{(k)} with stages k being the rows and the disjoint pop. J the columns (same names as the pi-vector above)
+#- a matrix with stages as rows (k=1,2,...,K) and populations one wants to test in as columns. Entries  xik are TRUE if a test in population i is supposed to be 
+#done at stage k and FALSE otherwise
 corrpi <- function(object, wherecond = NULL, stagescond = NULL, knew = NULL, sigma2 = NULL){
   condition <- !is.null(wherecond) & !is.null(knew) & !is.null(stagescond)
   knew <- ifelse(!condition, 1, knew)
