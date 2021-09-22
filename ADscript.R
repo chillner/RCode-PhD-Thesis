@@ -3,14 +3,20 @@
 ##################################
 source("GSDclassscript.R")
 source("GSDDesign")
-library(gtools)
-library(doParallel)
+library(gtools) #to use functions that compute permutations/combinations
+library(doParallel) #to parallelize simulation runs
 library(mvtnorm)
 
+##############################################################################################################################################
+#Some helping functions to characterize the population structure and help finding the relevant parameter configurations by means of ThetaC
+##############################################################################################################################################
+#Returns the power set of some set
 powerset <- function(x) {
   sets <- lapply(1:(length(x)), function(i) combn(x, i, simplify = F))
   unlist(sets, recursive = F)
 }
+#Checks whether a certain function exists in the given population structure 
+#(If Intersection(P1,P2) and Intersection(P2,P3) exist, but Intersection(P1,P3) doesn't, then P{1,3} shouldn't exist)
 existspop <- function(intersections, x){
   cn <- combn(x,2)
   s <- 0
@@ -19,6 +25,8 @@ existspop <- function(intersections, x){
   }
   return(ifelse(s == ncol(cn), TRUE, FALSE))
 }
+                 
+#Find the partition of the overall population
 popsToPartition <- function(intersections, setex = FALSE){
   
   f <- function(x){
@@ -41,6 +49,8 @@ popsToPartition <- function(intersections, setex = FALSE){
     return(unlist(lapply(pset, function(x){paste(x, collapse = " & ")})))
   }
 }
+                 
+#If populations are in form of disj. subpop., find the respective set of overall populations Pj                 
 partitionToPops <- function(partitions){
   if(is.character(partitions)){
     gcomma <- grepl(",", partitions)
@@ -819,14 +829,14 @@ simAD <- function(Nsim, pops, prev, delta, knew = 2, seed = 321, theta_rel = the
   return(list(scenario = scenario, conditional = resultmatrix, unconditional = resultmatrix_uncond))
 }
 
-#Example for using simAD
-#Nsim = 1000 #over Nsim = 10000 or 50000 might take a while...
+#Quick example for using simAD
+#Nsim = 1000 #values > 10^4 might take a while...
 #pops = matrix(1, nr=2, nc=2) #two intersecting populations
 #delta=.3*rep(1,3) #same effect in each population P{1}, P{2}, P{1,2}
 #knew=2 #mid-trial change happens at stage 2
-#seed=1234  #some seed
-#lbound = qnorm(.9); 
-#alpha=.025 #2.5% type I error rate for initial design
+#seed=321  #some seed
+#lbound = qnorm(.9) decision boundary for AD1
+#alpha=.025 #2.5% type I error rate for initial GSD
 #beta=.2 #80 Power for the initial design
 #optparD1 = .5 #Pocock design for initial design
 #prev = c(.4,.4,.2) #pi{1}=pi{2} = 0.4, p{1,2} = 0.2
