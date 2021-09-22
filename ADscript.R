@@ -402,9 +402,6 @@ ThetaC(pop.old = getPops(oldD), pop.new= getPops(newD))
 #Simulation function
 #####################################
 
-#Nsim = 20000; pops = matrix(1, nr=2, nc=2); delta=.3*rep(1,3); knew=2; seed=321; lbound = qnorm(.9);
-#alpha=.025; beta=.2; optparD1 = .5; prev = c(.4,.4,.2); N = 100
-
 #critical values for single stage design in Chapter 6.3
 critSingle <- function(prev, alpha){
   piv <- prev[1:2]+prev[3]
