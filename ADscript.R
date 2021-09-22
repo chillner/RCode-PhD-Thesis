@@ -818,3 +818,16 @@ simAD <- function(Nsim, pops, prev, delta, knew = 2, seed = 321, theta_rel = the
   names(scenario) <- c(paste0("pi",names(delta)), paste0("d",names(delta)), paste0("D", names(Delta)), "N1", "WTpar")
   return(list(scenario = scenario, conditional = resultmatrix, unconditional = resultmatrix_uncond))
 }
+
+#Example for using simAD
+#Nsim = 1000 #over Nsim = 10000 or 50000 might take a while...
+#pops = matrix(1, nr=2, nc=2) #two intersecting populations
+#delta=.3*rep(1,3) #same effect in each population P{1}, P{2}, P{1,2}
+#knew=2 #mid-trial change happens at stage 2
+#seed=1234  #some seed
+#lbound = qnorm(.9); 
+#alpha=.025 #2.5% type I error rate for initial design
+#beta=.2 #80 Power for the initial design
+#optparD1 = .5 #Pocock design for initial design
+#prev = c(.4,.4,.2) #pi{1}=pi{2} = 0.4, p{1,2} = 0.2
+#N = 100 #overall sample size of stage 1 (can also be computed by the function if set to NULL)
