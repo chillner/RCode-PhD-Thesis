@@ -76,6 +76,56 @@ sim_piest <- function(Nsim = 10^4, samplesize = 100, stepsize = 0.05, seed = 423
   return(z)
 }
 
+######################################################
+#Alternative way to conduct the simulation (faster)
+#######################################################
+#expand.grid unique 
+expand.grid.unique <- function(x, y, include.equals=FALSE)
+{
+  x <- unique(x)
+  
+  y <- unique(y)
+  
+  g <- function(i)
+  {
+    z <- setdiff(y, x[seq_len(i-include.equals)])
+    
+    if(length(z)) cbind(x[i], z, deparse.level=0)
+  }
+  
+  do.call(rbind, lapply(seq_along(x), g))
+}
+
+#Simulation:
+sim_piest <- function(Nsim = 10^4, samplesize = 100, stepsize = 0.05, seed = 423, corrfct = 1){
+  #all combinations of pi1, pi2 true:
+  pi1.true <- seq(0,1,stepsize)
+  pi.true <- expand.grid.unique(pi1.true, pi1.true, include.equals = T)
+  pi.true <- pi.true[pi.true[,1]+pi.true[,2]<=1,]
+  pi.true <- cbind(pi.true, 1-rowSums(pi.true))
+  set.seed(seed)
+  #function conducting the simulation:
+  f <- function(p){
+    pi.est.matrix <- rmultinom(n=Nsim, size=samplesize, prob=p)/samplesize
+    #pwer.vector <- numeric(Nsim)
+    g <- function(k){
+      pi.est <- pi.est.matrix[,k]
+      #critical value:
+      crit.1 <- critpwer(alpha=0.025, piv=pi.est, corrfct = corrfct)
+      if((p[1]+p[2] == 1)|p[3] == 1 | (pi.est[1]+pi.est[2] == 1)|pi.est[3] == 1){
+        return(0.025)
+      }
+      else{
+        return(pwerfct(piv=p, corr=corrpi(piv=pi.est, corrfct=corrfct), crit=crit.1))
+      }
+    }
+    pwer.vector <- sapply(1:ncol(pi.est.matrix), g)
+    return(c(mean(pwer.vector), sd(pwer.vector)/sqrt(Nsim)))
+  }
+  cbind(pi.true, t(apply(pi.true, 1, f)))
+}
+
+#RUN SIMULATIONS:
 #equal treatment case (corrfct == 1):
 z100 <- sim_piest(samplesize = 100)
 z50 <- sim_piest(samplesize = 50)
@@ -83,7 +133,9 @@ z50 <- sim_piest(samplesize = 50)
 y100 <- sim_piest(samplesize = 100, corrfct = 2)
 y50 <- sim_piest(samplesize = 50, corrfct = 2)
 
+##############################
 #Contour plots:
+##############################
 #Equal treatment case:
 #n = 100:
 filled.contour(x=pi1.true, y=pi1.true, z = z100, zlim = c(0.025, 0.02507), 
