@@ -8,7 +8,7 @@ library(multcomp)
 corpi12_1 <- function(pi12){2*pi12/(1+pi12)}
 #multiple treatments:
 corpi12_2 <- function(pi12){
-  3*pi12/(2+pi12)  
+  3*pi12/(2*(1+2*pi12))  
 }
 
 #critical values for PWER- and FWER-control
