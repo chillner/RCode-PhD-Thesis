@@ -1,5 +1,5 @@
 ############################################
-#Simulation estimation of pi (Section 5.3)
+#Simulation estimation of pi
 ############################################
 library(multcomp)
 #PWER-function:
