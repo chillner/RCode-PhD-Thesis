@@ -2,6 +2,7 @@
 #Simulation estimation of pi
 ############################################
 library(multcomp)
+alpha = 0.025
 #PWER-function:
 pwerfct <- function(piv, corr, crit){
   Sigma <- matrix(c(1,corr,corr,1),nr=2)
@@ -88,10 +89,11 @@ y100 <- sim_piest(samplesize = 100, corrfct = 2)
 y50 <- sim_piest(samplesize = 50, corrfct = 2)
 
 #function to find minimum without 0 values in matrix
+p1.true = seq(0,1,0.05)
 min0 <- function(x){y <- as.numeric(x); min(y[y>0])}
 
 ##############################
-#Contour plots:
+#Code to create contour plots
 ##############################
 #Equal treatment case:
 #n = 100:
@@ -118,6 +120,7 @@ filled.contour(x=pi1.true, y=pi1.true, z = y50, zlim = c(min0(y50), max(y50)),
                plot.axes = contour(x=pi1.true, y=pi1.true, z = y50, levels = seq(min0(y50), max(y50), 0.00002), add=T))
 
 # values of 0.00001 and 0.00002 can be changed to adjust the look of the plot
+# use color.palette = function(n) hcl.colors(n) for colored version
 
 #######################################################################################################
 #computationally more efficient way to conduct the simulation that also calculates standard deviations
