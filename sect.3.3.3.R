@@ -1,6 +1,6 @@
-####################################
-#Simulation estimation of pi
-####################################
+############################################
+#Simulation estimation of pi (Section 5.3)
+############################################
 library(multcomp)
 #PWER-function:
 pwerfct <- function(piv, corr, crit){
@@ -22,9 +22,11 @@ corrpi<- function(piv, corrfct){
 #critical values for PWER control:
 critpwer <- function(alpha, piv, corrfct = 1){
   if(piv[1]+piv[2] == 1){
+    #disjoint populations
     return(qnorm(1-alpha))
   }
   else if(piv[3] == 1){
+    #one population p12 = 1
     return(ifelse(corrfct == 1, qnorm(1-alpha), qmvnorm(1-alpha, tail="lower.tail", corr = matrix(c(1,0.5,0.5,1), nr=2))$quantile))
   }
   else{
@@ -60,12 +62,13 @@ sim_piest <- function(Nsim = 10^4, samplesize = 100, stepsize = 0.05, seed = 423
         for(k in 1:(dim(pi.est.matrix)[2])){
           pi.est <- pi.est.matrix[,k]
           pi.est <- pi.est/sum(pi.est)
-          #critical value:
+          #critical value from estimated PWER:
           crit.1 <- critpwer(alpha=0.025, piv=pi.est, corrfct = corrfct)
           if((pitrue[1]+pitrue[2] == 1)|pitrue[3] == 1 | (pi.est[1]+pi.est[2] == 1)|pi.est[3] == 1){
             pwer.vector[k] <- alpha
           }
           else{
+            #"true" PWER using estimated correlations (conditional on sample sizes)
             pwer.vector[k] <- pwerfct(piv=pitrue, corr=corrpi(piv=pi.est, corrfct=corrfct), crit=crit.1)
           }
         }
@@ -76,9 +79,49 @@ sim_piest <- function(Nsim = 10^4, samplesize = 100, stepsize = 0.05, seed = 423
   return(z)
 }
 
-######################################################
-#Alternative way to conduct the simulation (faster)
-#######################################################
+#RUN SIMULATIONS:
+#equal treatment case (corrfct == 1):
+z100 <- sim_piest(samplesize = 100)
+z50 <- sim_piest(samplesize = 50)
+#unequal treatment case (corrfct == 2):
+y100 <- sim_piest(samplesize = 100, corrfct = 2)
+y50 <- sim_piest(samplesize = 50, corrfct = 2)
+
+#function to find minimum without 0 values in matrix
+min0 <- function(x){y <- as.numeric(x); min(y[y>0])}
+
+##############################
+#Contour plots:
+##############################
+#Equal treatment case:
+#n = 100:
+filled.contour(x=pi1.true, y=pi1.true, z = z100, zlim = c(min0(z100), max(z100)), 
+               color.palette = function(n) gray.colors(n), 
+               main = "n=100", xlab = expression(pi["{1}"]), ylab = expression(pi["{2}"]),
+               plot.axes = contour(x=pi1.true, y=pi1.true, z = z100, levels = seq(min0(z100), max(z100), 0.00001), add=T))
+
+#n = 50:
+filled.contour(x=pi1.true, y=pi1.true, z = z50, zlim = c(min0(z50), max(z50)), 
+               color.palette = function(n) terrain.colors(n), 
+               main = "n=50", xlab = expression(pi["{1}"]), ylab = expression(pi["{2}"]),
+               plot.axes = contour(x=pi1.true, y=pi1.true, z = z50, levels = seq(min0(z50), max(z50), 0.00002), add=T))
+#Unequal treatment case:
+#n = 100:
+filled.contour(x=pi1.true, y=pi1.true, z = y100, zlim = c(min0(y100), max(y100)), 
+               color.palette = function(n) terrain.colors(n), 
+               main = "n=100", xlab = expression(pi["{1}"]), ylab = expression(pi["{2}"]),
+               plot.axes = contour(x=pi1.true, y=pi1.true, z = y100, levels = seq(min0(y100), max(y100), 0.00001), add=T))
+#n = 50:
+filled.contour(x=pi1.true, y=pi1.true, z = y50, zlim = c(min0(y50), max(y50)), 
+               color.palette = function(n) terrain.colors(n), 
+               main = "n=50", xlab = expression(pi["{1}"]), ylab = expression(pi["{2}"]),
+               plot.axes = contour(x=pi1.true, y=pi1.true, z = y50, levels = seq(min0(y50), max(y50), 0.00002), add=T))
+
+# values of 0.00001 and 0.00002 can be changed to adjust the look of the plot
+
+#######################################################################################################
+#computationally more efficient way to conduct the simulation that also calculates standard deviations
+#######################################################################################################
 #expand.grid unique 
 expand.grid.unique <- function(x, y, include.equals=FALSE)
 {
@@ -110,12 +153,13 @@ sim_piest <- function(Nsim = 10^4, samplesize = 100, stepsize = 0.05, seed = 423
     #pwer.vector <- numeric(Nsim)
     g <- function(k){
       pi.est <- pi.est.matrix[,k]
-      #critical value:
+      #critical value estimated PWER:
       crit.1 <- critpwer(alpha=0.025, piv=pi.est, corrfct = corrfct)
       if((p[1]+p[2] == 1)|p[3] == 1 | (pi.est[1]+pi.est[2] == 1)|pi.est[3] == 1){
         return(0.025)
       }
       else{
+        #true PWER conditional on sample sizes
         return(pwerfct(piv=p, corr=corrpi(piv=pi.est, corrfct=corrfct), crit=crit.1))
       }
     }
@@ -125,40 +169,3 @@ sim_piest <- function(Nsim = 10^4, samplesize = 100, stepsize = 0.05, seed = 423
   cbind(pi.true, t(apply(pi.true, 1, f)))
 }
 
-#RUN SIMULATIONS:
-#equal treatment case (corrfct == 1):
-z100 <- sim_piest(samplesize = 100)
-z50 <- sim_piest(samplesize = 50)
-#unequal treatment case (corrfct == 2):
-y100 <- sim_piest(samplesize = 100, corrfct = 2)
-y50 <- sim_piest(samplesize = 50, corrfct = 2)
-
-##############################
-#Contour plots:
-##############################
-#Equal treatment case:
-#n = 100:
-filled.contour(x=pi1.true, y=pi1.true, z = z100, zlim = c(0.025, 0.02507), 
-               color.palette = function(n) gray.colors(n), 
-               main = "n=100", xlab = expression(pi["{1}"]), ylab = expression(pi["{2}"]),
-               plot.axes = contour(x=pi1.true, y=pi1.true, z = z100, levels = seq(0.025, 0.02507, 0.00001), add=T))
-#no lines:
-filled.contour(x=pi1.true, y=pi1.true, z = z100, zlim = c(0.025, 0.02507), 
-               color.palette = function(n) gray.colors(n), 
-               main = "n=100", xlab = expression(pi["{1}"]), ylab = expression(pi["{2}"]))
-#n = 50:
-filled.contour(x=pi1.true, y=pi1.true, z = z50, zlim = c(0.0249, 0.02515), 
-               color.palette = function(n) terrain.colors(n), 
-               main = "n=50", xlab = expression(pi["{1}"]), ylab = expression(pi["{2}"]),
-               plot.axes = contour(x=pi1.true, y=pi1.true, z = z50, levels = seq(0.0249, 0.0252, 0.00002), add=T))
-#Unequal treatment case:
-#n = 100:
-filled.contour(x=pi1.true, y=pi1.true, z = y100, zlim = c(0.025, 0.02508), 
-               color.palette = function(n) terrain.colors(n), 
-               main = "n=100", xlab = expression(pi["{1}"]), ylab = expression(pi["{2}"]),
-               plot.axes = contour(x=pi1.true, y=pi1.true, z = z100, levels = seq(0.025, 0.02508, 0.00001), add=T))
-#n = 50:
-filled.contour(x=pi1.true, y=pi1.true, z = y50, zlim = c(0.0249, 0.02515), 
-               color.palette = function(n) terrain.colors(n), 
-               main = "n=50", xlab = expression(pi["{1}"]), ylab = expression(pi["{2}"]),
-               plot.axes = contour(x=pi1.true, y=pi1.true, z = z50, levels = seq(0.0249, 0.0252, 0.00002), add=T))
