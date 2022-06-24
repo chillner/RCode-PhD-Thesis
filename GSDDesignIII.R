@@ -1,23 +1,13 @@
 #######################################################################
-#Design I - H_1 = {h_1, h_2}, H_2 = {H_1, H_2, H_{1}, H_{2}, H_{1,2}}
+#Design III - H_1 = {h_1, h_2}, H_2 = {H_1, H_2, H_{1}, H_{2}, H_{1,2}}
 #######################################################################
 library(multcomp)
 #PWER-function:
-#crit vector:
-#(c_1^, c_1^1, c_1^2, c_2^2, c_{1}^2, c_{2}^2, c_{1,2}^2)
-#prev: (pi_J)_{J\in I}
-#sigma: correlation matrix
-#nu: non-centrality parameter (7-dim.)
-#w: weights for inverse normal combination
-#tau.option: "overall": classic treatment of information rates
-#            "individual": population-wise information rates
-#n: matri x of theform
-#        P{1} P{2} P{1,2}
-#stage 1 n{1}^(1) n{2}^(1) n{1,2}^(1)
-#stage 2 n{1}^(2) n{2}^(2) n{1,2}^(2)
-#aspend: type of spending function: "Hwang" or "Kim"
-#spendingfct: should the spendingfunction approach be used (logical)?
+#crit list
+#  P1  P2
+#(c_1^1, c_2^1, c_1^2, c_2^2, c_{1}^2, c_{2}^2, c_{1,2}^2)
 corrmat <- function(prev, w){
+  piv <- prev[1:2]+prev[3]
   rho12 <- prev[3]/sqrt(piv[1]*piv[2])
   rho1_1 <- sqrt(prev[1]/piv[1])
   rho2_2 <- sqrt(prev[2]/piv[2])
@@ -81,20 +71,21 @@ pwer <- function(crit, prev, nu = rep(0,7), sigma){
 critWT <- function(p, prev, sigma, alpha = 0.025, n, tau.option){
   if(tau.option == "overall"){
     tau <- sum(n[1,])/sum(n)
-    tau <- tau*rep(1,5)
+    tau <- c(1,1,tau*rep(1,5))
   }
   else if(tau.option == "population-wise"){
     tau1 <- (n[1,1]+n[1,3])/sum(n[,c(1,3)])
     tau2 <- (n[1,2]+n[1,3])/sum(n[,c(2,3)])
     tau_indpop <- n[1,]/c(sum(n[,1]),sum(n[,2]),sum(n[,3]))
-    tau <- c(tau1, tau2, tau_indpop)
+    tau <- c(1,1, tau1, tau2, tau_indpop)
   }
   f <- function(cr){
-    crit <- cr*(1/c(1,1,tau1,tau2,tau_indpop))^(p-0.5)
+    crit <- cr*(1/tau)^(p-0.5)
     pwer(crit=crit,prev=prev, sigma=sigma)$PWER-alpha
   }
   cr_const <- uniroot(f, interval = c(qnorm(1-alpha),5))$root
-  res <- cr_const*(1/c(1,1,tau))^(p-0.5)
+  res <- cr_const*(1/tau)^(p-0.5)
+  return(res)
 }
 #error spending critical values
 critES <- function(p, prev, sigma, alpha=0.025, tau, aspend){
@@ -125,10 +116,9 @@ critES <- function(p, prev, sigma, alpha=0.025, tau, aspend){
 pwp <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.025){
   if(nrow(n) == 2 & ncol(n) == 3){
     piv <- prev[1:2]+prev[3]
-    nu <- delta*sqrt(n[1,1:2]+n[1,3], n[1,1:2]+n[2,1:2]+sum(n[,3]),
-                     n[1,]+n[2,])
-    w <- c((n[1,1:2]+n[1,3])/c(sum(n[,c(1,3)]),sum(n[,c(2,3)])), #w1,w2
-           n[1,]/(n[1,]+n[2,]))
+    nu <- c(delta[1],delta[2],delta[1],delta[2],delta[3:5])*sqrt(c(n[1,1:2]+n[1,3], n[1,1:2]+n[2,1:2]+sum(n[,3]), n[1,]+n[2,]))
+    w <- sqrt(c((n[1,1:2]+n[1,3])/c(sum(n[,c(1,3)]),sum(n[,c(2,3)])),
+           n[1,]/(n[1,]+n[2,])))
     sigma <- corrmat(prev=prev, w=w)
     #critical values:
     if(is.null(spendingfct)){
@@ -142,15 +132,15 @@ pwp <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.025
     }
     ##power value
     #denominator
-    den <- prev[1]*ifelse(delta[1]>0 | delta[3]>0)+
-      prev[2]*ifelse(delta[2]>0 | delta[4]>0)+
-      prev[3]*ifelse(delta[1]>0 | delta[2]>0 | delta[5]>0)
+    den <- prev[1]*(delta[1]>0 | delta[3]>0)+
+      prev[2]*(delta[2]>0 | delta[4]>0)+
+      prev[3]*(delta[1]>0 | delta[2]>0 | delta[5]>0)
     #numerator
     upper1 <- upper2 <- upper12 <- rep(Inf,7)
     upper1[c(1,3,5)] <- c(crit[c(1,3)]*ifelse(delta[1]>0,1,Inf), crit[5]*ifelse(delta[3]>0,1,Inf))
     upper2[c(2,4,6)] <- c(crit[c(2,4)]*ifelse(delta[2]>0,1,Inf), crit[6]*ifelse(delta[4]>0,1,Inf))
     upper12[c(1:4,7)] <- c(crit[c(1,3)]*ifelse(delta[1]>0,1,Inf), crit[c(2,4)]*ifelse(delta[2]>0,1,Inf),
-                           crit[7]*ifelse(delta[1]>0|delta[2]>0|delta[5]>0))[c(1,3,2,4,5)]
+                           crit[7]*ifelse(delta[1]>0|delta[2]>0|delta[5]>0,1,Inf))[c(1,3,2,4,5)]
     num <- prev[1]*(1-pmvnorm(upper=upper1, mean = nu, sigma=sigma))+
       prev[2]*(1-pmvnorm(upper=upper2, mean = nu, sigma=sigma))+
       prev[3]*(1-pmvnorm(upper=upper12, mean = nu, sigma=sigma))
@@ -158,12 +148,11 @@ pwp <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.025
     return(ifelse(den>0,num/den,0))
   }
 }
+
 pow1 <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.025){
   piv <- prev[1:2]+prev[3]
-  nu <- delta*sqrt(n[1,1:2]+n[1,3], n[1,1:2]+n[2,1:2]+sum(n[,3]),
-                   n[1,]+n[2,])
-  w <- c((n[1,1:2]+n[1,3])/c(sum(n[,c(1,3)]),sum(n[,c(2,3)])), #w1,w2
-         n[1,]/(n[1,]+n[2,]))
+  nu <- c(delta[1],delta[2],delta[1],delta[2],delta[3:5])*sqrt(c(n[1,1:2]+n[1,3], n[1,1:2]+n[2,1:2]+sum(n[,3]), n[1,]+n[2,]))
+  w <- sqrt(c((n[1,1:2]+n[1,3])/c(sum(n[,c(1,3)]),sum(n[,c(2,3)])), n[1,]/(n[1,]+n[2,])))
   sigma <- corrmat(prev=prev, w=w)
   #critical values:
   if(is.null(spendingfct)){
@@ -176,7 +165,7 @@ pow1 <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.02
                    tau = tau, aspend = spendingfct)
   }
   pos <- which(nu > 0)
-  1-pmvnorm(upper=crit[pos], mean = nu[pos], sigma = sigma[pos,pos], algorithm = Miwa())[1]
+  1-pmvnorm(upper=crit[pos], mean = nu[pos], sigma = sigma[pos,pos])[1]
 }
 
 power <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.025, powertype){
@@ -184,18 +173,18 @@ power <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.0
     pwp(p=p, prev=prev, delta=delta, n=n, spendingfct=spendingfct, tau.option=tau.option, alpha=alpha)
   }
   else if(powertype == "pow1"){
-    pow1(p=p, prev=prev, delta=delta, N=N, spendingfct=spendingfct, tau.option=tau.option, alpha=alpha)
+    pow1(p=p, prev=prev, delta=delta, n=n, spendingfct=spendingfct, tau.option=tau.option, alpha=alpha)
   }
 }
 
 #N root
 Nroot <- function(p, prev, delta, gamma=c(1,1,1), alpha = 0.025, 
-                  beta = 0.2, spendingfct = NULL, tau, powertype,
+                  beta = 0.2, spendingfct = NULL, tau.option, powertype,
                   search.interval = c(1,2000)){
   fzero <- function(N){
     n <- rbind(N*prev, gamma*N*prev)
-    power(n=n, p=p, prev=prev, delta = delta, gamma=gamma, 
-          spendingfct = spendingfct, tau=tau, alpha = alpha)-(1-beta)
+    power(n=n, p=p, prev=prev, delta = delta, powertype = powertype,
+          spendingfct = spendingfct, tau.option=tau.option, alpha = alpha)-(1-beta)
   }
   uniroot(fzero, interval = search.interval)$root
 }
@@ -247,3 +236,35 @@ opt_par <- function(prev, delta, tau.option, gamma = c(1,1,1), spendingfct = NUL
   }
   optimize(fzero, interval = search.interval.p)$min
 }
+
+
+######################
+#Table Section 5
+######################
+tabD3 <- as.data.frame(matrix(0, nr = 6, nc = 9))
+colnames(tabD3) <- c("pi{1}","pi{2}", "pi{1,2}", "c0", "c05", "N_PWP0", "N_PWP05", "N_Pow1_0", "N_Pow1_05")
+pr <- rbind(c(0.3,0.3,0.4),
+            c(0.35,0.35,0.3),
+            c(0.4, 0.4, 0.2),
+            c(0.4,0.2,0.4),
+            c(0.4,0.3,0.3),
+            c(0.6,0.2,0.2))
+tabD3[,1:3] <- pr 
+w <- 1/sqrt(c(2,2,2,2,2))
+delta <- c(0.3,0.3,0.3,0.3,0.3)
+for(i in 1:6){
+  pri <- pr[i,]
+  n <- rbind(pri,pri)
+  corr <- corrmat(prev = pri, w = w)
+  tabD3[i, 4] <- critWT(p=0, prev=pri, sigma = corr, n = n, tau.option = "overall")[1]
+  tabD3[i, 5] <- critWT(p=.5, prev=pri, sigma = corr, n = n, tau.option = "overall")[1]
+  tabD3[i, 6] <- Nroot(p=0, prev=pri, delta=delta, beta = 0.1, spendingfct = NULL, tau.option ="overall", powertype = "pwp")
+  tabD3[i, 7] <- Nroot(p=.5, prev=pri, delta=delta, beta = 0.1, spendingfct = NULL, tau.option ="overall", powertype = "pwp")
+  tabD3[i, 8] <- Nroot(p=0, prev=pri, delta=delta, beta = 0.1, spendingfct = NULL, tau.option ="overall", powertype = "pow1")
+  tabD3[i, 9] <- Nroot(p=.5, prev=pri, delta=delta, beta = 0.1, spendingfct = NULL, tau.option ="overall", powertype = "pow1")
+}
+tabD3[,4:5] <- round(tabD3[,4:5], 3)
+tabD3[,6:9] <- ceiling(tabD3[,6:9])
+tabD3
+
+xtable(x=tabD3, caption = "A caption", label = "tab: tabD3", digits = 3)
