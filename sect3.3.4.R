@@ -1,5 +1,5 @@
 #################################################
-#Simulation in Section 4.4
+#Simulation in Section 3.3.4
 #################################################
 library(multcomp)
 library(gtools)
