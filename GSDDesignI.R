@@ -198,10 +198,10 @@ ASNroot <-function(p, prev, delta, gamma=c(1,1,1), alpha = 0.025,
   }
   #ASN
   N0 + (n[2,1]+n[2,3])*pmvnorm(lower=c(-Inf,crit[1,2]), upper=c(crit[1,1],Inf), 
-                           mean = nu[c(1,3)], sigma = sigma[c(1,3),c(1,3)])[1]
-     + (n[2,2]+n[2,3])*pmvnorm(lower=c(crit[1,1], -Inf), upper=c(Inf, crit[1,2]), 
-                                  mean = nu[c(1,3)], sigma = sigma[c(1,3),c(1,3)])[1]
-     + sum(n[2,])*pmvnorm(lower=c(-Inf,-Inf), upper=c(crit[1,1],crit[1,2]), 
+                           mean = nu[c(1,3)], sigma = sigma[c(1,3),c(1,3)])[1] +
+  (n[2,2]+n[2,3])*pmvnorm(lower=c(crit[1,1], -Inf), upper=c(Inf, crit[1,2]), 
+                                  mean = nu[c(1,3)], sigma = sigma[c(1,3),c(1,3)])[1] +
+  sum(n[2,])*pmvnorm(lower=c(-Inf,-Inf), upper=c(crit[1,1],crit[1,2]), 
                        mean = nu[c(1,3)], sigma = sigma[c(1,3),c(1,3)])[1]
 }
 
