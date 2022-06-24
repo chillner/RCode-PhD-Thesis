@@ -7,7 +7,7 @@ corrmat <- function(prev, w){
   piv <- prev[1:2]+prev[3]
   rho <- prev[3]/sqrt(piv[1]*piv[2])
   sigma <- matrix(c(1, w[1], rho, w[2]*rho,
-                    0, 1, w[1]*rho, rho,
+                    0, 1, w[1]*rho, rho*(w[1]*w[2]+sqrt((1-w[1]^2)*(1-w[2]^2))),
                     0, 0, 1, w[2],
                     0, 0, 0, 1), nr = 4, byrow = T)
   sigma <- sigma + t(sigma) - diag(4)
@@ -18,7 +18,7 @@ corrmat <- function(prev, w){
 #  P1  P2
 #1 c11 c12
 #2 c21 c22
-pwer <- function(crit, prev, nu = c(0,0,0,0), sigma){
+pwer <- function(crit, prev, nu = c(0,0,0,0), sigma, uF = -Inf){
   names(prev) <- c("P1", "P2", "P12")
   if(!is.matrix(crit)){
     crit <- matrix(c(crit,crit), byrow = FALSE, nr=2, nc=2)
@@ -28,32 +28,39 @@ pwer <- function(crit, prev, nu = c(0,0,0,0), sigma){
   P[1] <- 1-pmvnorm(upper= crit[,1], mean = nu[1:2], sigma = sigma[1:2,1:2], algorithm = Miwa())[1]
   P[2] <- 1-pmvnorm(upper= crit[,2], mean = nu[3:4], sigma = sigma[3:4,3:4], algorithm = Miwa())[1]
   P[3] <- 1-pmvnorm(upper= c(crit[,1], crit[,2]), mean = nu, sigma = sigma, algorithm = Miwa())[1]
-  PWER <- sum(prev*P)
   #PWER^(k):
-  PWER1 <- prev[1]*(1-pnorm(crit[1,1], mean = nu[1],  sd = 1))+
-           prev[2]*(1-pnorm(crit[1,2], mean = nu[3],  sd = 1))+
-           prev[3]*(1-pmvnorm(upper = crit[1,], mean = nu[c(1,3)],
-                              sigma = sigma[c(1,3),c(1,3)], algorithm = Miwa())[1])
+  P11 <- 1-pnorm(crit[1,1], mean = nu[1],  sd = 1)
+  P12 <- 1-pnorm(crit[1,2], mean = nu[3],  sd = 1)
+  P13 <- 1-pmvnorm(upper = crit[1,], mean = nu[c(1,3)],
+                   sigma = sigma[c(1,3),c(1,3)], algorithm = Miwa())[1]
+  P21 <-pmvnorm(lower=c(uF, crit[2,1]), upper=c(crit[1,1],Inf), mean = nu[1:2], 
+                sigma=sigma[1:2,1:2], algorithm = Miwa())[1]
+  P22 <- pmvnorm(lower=c(uF, crit[2,2]), upper=c(crit[1,2],Inf), mean = nu[3:4],
+                 sigma=sigma[3:4,3:4], algorithm = Miwa())[1]
+  P23 <- pmvnorm(lower=c(uF,crit[2,1],uF),upper=c(crit[1,1],Inf,crit[1,2]),
+                 mean=nu[1:3], sigma=sigma[1:3,1:3], algorithm = Miwa())[1]+
+         pmvnorm(lower=c(uF,uF,uF,crit[2,2]), upper=c(crit[1,1],crit[2,1],crit[1,2],Inf),
+                 mean=nu, sigma=sigma, algorithm = Miwa())[1]
+  PWER1 <- prev[1]*P11+prev[2]*P12+prev[3]*P13
+  PWER2 <- prev[1]*P21+prev[2]*P22+prev[3]*P23
   
-  PWER2 <- prev[1]*pmvnorm(lower=c(-Inf, crit[2,1]), upper=c(crit[1,1],Inf), mean = nu[1:2], 
-                           sigma=sigma[1:2,1:2], algorithm = Miwa())[1]+
-           prev[2]*pmvnorm(lower=c(-Inf, crit[2,2]), upper=c(crit[1,2],Inf), mean = nu[3:4],
-                           sigma=sigma[3:4,3:4], algorithm = Miwa())[1]+
-           prev[3]*(pmvnorm(lower=c(-Inf,crit[2,1],-Inf),upper=c(crit[1,1],Inf,crit[1,2]),
-                            mean=nu[1:3], sigma=sigma[1:3,1:3], algorithm = Miwa())[1]+
-                    pmvnorm(lower=c(-Inf,-Inf,-Inf,crit[2,2]), upper=c(crit[1,1],crit[2,1],crit[1,2],Inf),
-                            mean=nu, sigma=sigma, algorithm = Miwa())[1])
+  if(is.null(uF)){
+    PWER <- sum(prev*P)
+  }
+  else{
+    PWER <- PWER1 + PWER2
+  }
   #results list:
-  res <- list(PWER = PWER, P1 = P[1], P2 = P[2], P12 = P[3], PWER_stage1 = PWER1, PWER_stage2 = PWER2)
+  res <- list(PWER = PWER, P1 = P11+P21, P2 = P12+P22, P12 = P13+P23, PWER_stage1 = PWER1, PWER_stage2 = PWER2)
   return(res)
 }
 
 #crit Wang Tsiatis:
 #tau matrix:
-#  P1  P2
-#1 n11 n12
-#2 n21 n22
-critWT <- function(p, prev, sigma, alpha = 0.025, n, tau.option){
+#  P{1}  P{2} P{1,2}
+#1 n{1}^(1)  n{2}^(1) n{1,2}^(1)
+#2 n{1}^(2)  n{2}^(2) n{1,2}^(2)
+critWT <- function(p, prev, sigma, alpha = 0.025, n, tau.option, uF = -Inf){
   if(!is.matrix(n)){
     n <- rbind(n,n)
   }
@@ -68,7 +75,7 @@ critWT <- function(p, prev, sigma, alpha = 0.025, n, tau.option){
   f <- function(cr){
     crit <- matrix(0, nr=2, nc=2)
     crit <- cr*sweep(tau,2,tau[1,],'/')^(p-0.5)
-    pwer(crit=crit,prev=prev, nu = rep(0,4), sigma=sigma)$PWER-alpha
+    pwer(crit=crit,prev=prev, nu = rep(0,4), sigma=sigma, uF = uF)$PWER-alpha
   }
   cr_const <- uniroot(f, interval = c(qnorm(1-alpha),5))$root
   res <- cr_const*sweep(tau,2,tau[1,],'/')^(p-0.5)
@@ -105,14 +112,14 @@ critES <- function(p, prev, sigma, alpha=0.025, tau, aspend){
 }
 
 #power-functions:
-pwp <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.025){
+pwp <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.025, uF = -Inf){
   if(nrow(n) == 2 & ncol(n) == 3){
-    nu <- c(delta*sqrt(n[1,1:2]+n[1,3]), delta*sqrt(n[2,1:2]+n[2,3]))[c(1,3,2,4)]
+    nu <- c(delta*sqrt(n[1,1:2]+n[1,3]), delta*sqrt(c(sum(n[,c(1,3)]),sum(n[,c(2,3)]))))[c(1,3,2,4)]
     w <- sqrt((n[1,1:2]+n[1,3])/c(sum(n[,c(1,3)]),sum(n[,c(2,3)])))
     sigma <- corrmat(prev=prev, w=w)
     #critical values:
     if(is.null(spendingfct)){
-      crit <- critWT(p=p, prev=prev, sigma=sigma, n=n,
+      crit <- critWT(p=p, prev=prev, sigma=sigma, n=n, uF = uF,
                      alpha=alpha, tau.option = tau.option)
     }
     else{
@@ -122,13 +129,13 @@ pwp <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.025
     }
     #power value
     if(nu[1]<= 0 & nu[3] > 0){
-      pwer(crit = crit, prev = prev, nu=nu, sigma=sigma)$P2
+      pwer(crit = crit, prev = prev, nu=nu, sigma=sigma, uF=uF)$P2
     }
     else if(nu[3]<= 0 & nu[1] > 0){
-      pwer(crit = crit, prev = prev, nu=nu, sigma=sigma)$P1
+      pwer(crit = crit, prev = prev, nu=nu, sigma=sigma, uF=uF)$P1
     }
     else if(nu[1]>0 & nu[3]>0){
-      pwer(crit = crit, prev = prev, nu=nu, sigma=sigma)$PWER
+      pwer(crit = crit, prev = prev, nu=nu, sigma=sigma, uF=uF)$PWER
     }
     else{
       0
@@ -137,7 +144,7 @@ pwp <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.025
 }
 
 pow1 <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.025){
-  nu <- c(delta*sqrt(n[1,1:2]+n[1,3]), delta*sqrt(n[2,1:2]+n[2,3]))[c(1,3,2,4)]
+  nu <- c(delta*sqrt(n[1,1:2]+n[1,3]), delta*sqrt(c(sum(n[,c(1,3)]),sum(n[,c(2,3)]))))[c(1,3,2,4)]
   w <- sqrt((n[1,1:2]+n[1,3])/c(sum(n[,c(1,3)]),sum(n[,c(2,3)])))
   sigma <- corrmat(prev=prev, w=w)
   #critical values:
@@ -155,9 +162,9 @@ pow1 <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.02
   1-pmvnorm(upper=crit.vec[pos], mean = nu[pos], sigma = sigma[pos,pos], algorithm = Miwa())[1]
 }
 
-power <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.025, powertype){
+power <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.025, powertype, uF = -Inf){
   if(powertype == "pwp"){
-    pwp(p=p, prev=prev, delta=delta, n=n, spendingfct=spendingfct, tau.option=tau.option, alpha=alpha)
+    pwp(p=p, prev=prev, delta=delta, n=n, spendingfct=spendingfct, tau.option=tau.option, alpha=alpha, uF = uF)
   }
   else if(powertype == "pow1"){
     pow1(p=p, prev=prev, delta=delta, n=n, spendingfct=spendingfct, tau.option=tau.option, alpha=alpha)
@@ -165,23 +172,23 @@ power <- function(p, prev, delta, n, spendingfct = NULL, tau.option, alpha = 0.0
 }
 
 #function for finding N:
-Nroot <- function(p, prev, delta, gamma=c(1,1,1), alpha = 0.025, 
+Nroot <- function(p, prev, delta, gamma=c(1,1,1), alpha = 0.025, uF = -Inf,
               beta = 0.2, spendingfct = NULL, tau.option, powertype,
               search.interval = c(1,2000)){
   fzero <- function(N){
     n <- rbind(N*prev, gamma*N*prev)
-    power(p=p, prev=prev, delta = delta, n=n, powertype = powertype,
+    power(p=p, prev=prev, delta = delta, n=n, powertype = powertype, uF = uF,
           spendingfct=spendingfct, tau.option=tau.option, alpha=alpha)-(1-beta)
   }
   uniroot(fzero, interval = search.interval)$root
   
 }
 
-ASNroot <-function(p, prev, delta, gamma=c(1,1,1), alpha = 0.025, 
+ASNroot <-function(p, prev, delta, gamma=c(1,1,1), alpha = 0.025, uF = -Inf,
                    beta = 0.2, spendingfct = NULL, tau.option, powertype,
                    search.interval = c(1,2000)){
   #find N such that power = 1-beta:
-  N0 <- Nroot(p=p, prev=prev, delta=delta, gamma=gamma, alpha=alpha, beta=beta, 
+  N0 <- Nroot(p=p, prev=prev, delta=delta, gamma=gamma, alpha=alpha, beta=beta, uF = uF,
               spendingfct=spendingfct, tau.option=tau.option, powertype=powertype,
               search.interval=search.interval)
   #critical values:
@@ -190,35 +197,34 @@ ASNroot <-function(p, prev, delta, gamma=c(1,1,1), alpha = 0.025,
   w <- sqrt((n[1,1:2]+n[1,3])/c(sum(n[,c(1,3)]),sum(n[,c(2,3)])))
   sigma <- corrmat(prev=prev, w=w)
   if(is.null(spendingfct)){
-    crit <- critWT(p=p, prev=prev, sigma=sigma, alpha=alpha, tau.option=tau.option, n=n)
+    crit <- critWT(p=p, prev=prev, sigma=sigma, alpha=alpha, tau.option=tau.option, n=n, uF = uF)
   }
   else{
     tau <- sum(n[1,])/sum(n)
     crit <- critES(p=p, prev=prev, sigma=sigma, alpha=alpha, tau=tau, aspend = spendingfct)
   }
   #ASN
-  N0 + (n[2,1]+n[2,3])*pmvnorm(lower=c(-Inf,crit[1,2]), upper=c(crit[1,1],Inf), 
-                           mean = nu[c(1,3)], sigma = sigma[c(1,3),c(1,3)])[1] +
-  (n[2,2]+n[2,3])*pmvnorm(lower=c(crit[1,1], -Inf), upper=c(Inf, crit[1,2]), 
-                                  mean = nu[c(1,3)], sigma = sigma[c(1,3),c(1,3)])[1] +
-  sum(n[2,])*pmvnorm(lower=c(-Inf,-Inf), upper=c(crit[1,1],crit[1,2]), 
-                       mean = nu[c(1,3)], sigma = sigma[c(1,3),c(1,3)])[1]
+  N0 + (n[2,1]+n[2,3])*pmvnorm(lower=c(uF,crit[1,2]), upper=c(crit[1,1],Inf), 
+                           mean = nu[c(1,3)], sigma = sigma[c(1,3),c(1,3)])[1] + 
+    (n[2,2]+n[2,3])*pmvnorm(lower=c(crit[1,1], uF), upper=c(Inf, crit[1,2]), 
+                            mean = nu[c(1,3)], sigma = sigma[c(1,3),c(1,3)])[1] + 
+    sum(n[2,])*pmvnorm(lower=c(uF,uF), upper=c(crit[1,1],crit[1,2]), mean = nu[c(1,3)], sigma = sigma[c(1,3),c(1,3)])[1]
 }
 
 #find optimal critical values (W&T or errspend parameter):
-opt_par <- function(prev, delta, tau.option, gamma = c(1,1,1), spendingfct = NULL, alpha = 0.025,
+opt_par <- function(prev, delta, tau.option, gamma = c(1,1,1), spendingfct = NULL, alpha = 0.025, uF = -Inf, 
                     beta = 0.2, powertype, search.inteval.N = c(1,2000), search.interval.p, opt.criterion,
                     grid.method = FALSE, grid.steps = 0.001){
   if(!grid.method){
     if(opt.criterion == "Nmin"){
       fzero <- function(x){
-        Nroot(p=x, prev=prev, delta=delta, gamma=gamma, alpha=alpha, beta=beta, tau.option=tau.option,
+        Nroot(p=x, prev=prev, delta=delta, gamma=gamma, alpha=alpha, beta=beta, tau.option=tau.option, uF = uF, 
               spendingfct = spendingfct, powertype = powertype, search.interval = search.inteval.N)
       }
     }
     if(opt.criterion == "ASNmin"){
       fzero <- function(x){
-        ASNroot(p=x, prev=prev, delta=delta, gamma=gamma, alpha=alpha, beta=beta, tau.option=tau.option,
+        ASNroot(p=x, prev=prev, delta=delta, gamma=gamma, alpha=alpha, beta=beta, tau.option=tau.option, uF = uF, 
               spendingfct = spendingfct, powertype = powertype, search.interval = search.inteval.N)
       }
     }
@@ -249,7 +255,6 @@ opt_par <- function(prev, delta, tau.option, gamma = c(1,1,1), spendingfct = NUL
 }
 
 
-
 ################
 #tests:
 ##################
@@ -274,7 +279,7 @@ pow1(p = 0.5, prev = prev, delta = c(0.3,0.3), n=n, spendingfct = "Kim", tau.opt
 
 #Nroot test:
 Nroot(p = 0.5, prev = prev, gamma = c(1,1,1), delta = c(0.3,0.3),
-      spendingfct = "Kim", tau.option="overall", powertype = "pwp")
+      spendingfct = NULL, tau.option="overall", powertype = "pwp")
 Nroot(p = 0.5, prev = prev, gamma = c(1,1,1), delta = c(0.2,0.2),
       spendingfct = NULL, tau.option="overall", powertype = "pow1")
 
@@ -286,289 +291,39 @@ ASNroot(p = 0.5, prev = prev, gamma = c(1,1,1), delta = c(0.3,0.3),
 opt_par(prev=prev, delta=c(0.2,0.2), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
         search.interval.p = c(-.8,0.1), opt.criterion = "Nmin")
 
-
-
-######Example values:
-prev1 = c(.4,.4,.2); prev2 = c(.6,.3,.1)
-block.N.ASN <- data.frame(N = numeric(3), ASN = numeric(3))
-optWT <- list(PWP.prev1 = block.N.ASN, PWP.prev2 = block.N.ASN, 
-              Pow1.prev1 = block.N.ASN, Pow1.prev2 = block.N.ASN)
-
-####################
-#####critWT
-####################
-####powertype PWP:
-###prev = c(.4,.4,.2)
-#####################
-##gamma=c(1,1,1)
-#####################
-#N
-optWT$PWP.prev1[1,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pwp", 
-                                search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT$PWP.prev1[2,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pwp", 
-                                search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT$PWP.prev1[3,1] <- optWT$PWP.prev1[2,1]
-#ASN
-optWT$PWP.prev1[1,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pwp",
-                                search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT$PWP.prev1[2,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pwp",
-                                search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT$PWP.prev1[3,2] <- optWT$PWP.prev1[2,2] 
-###prev = c(.6,.3,.1)
-#N
-optWT$PWP.prev2[1,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pwp", 
-        search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT$PWP.prev2[2,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pwp",
-        search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT$PWP.prev2[3,1] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pwp",
-        search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-#ASN
-optWT$PWP.prev2[1,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pwp",
-                                search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT$PWP.prev2[2,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pwp",
-                                search.inteval.N = c(1,2000), search.interval.p =c(-1,1), opt.criterion = "ASNmin")
-optWT$PWP.prev2[3,2] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pwp",
-                                search.inteval.N = c(1,2000), search.interval.p =c(-1,1), opt.criterion = "ASNmin")
-
-####powertype Pow1:
-###prev = c(.4,.4,.2)
-#N
-optWT$Pow1.prev1[1,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pow1", 
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT$Pow1.prev1[2,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pow1",
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT$Pow1.prev1[3,1] <- optWT$Pow1.prev1[2,1]
-#ASN
-optWT$Pow1.prev1[1,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pow1",
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT$Pow1.prev1[2,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pow1",
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT$Pow1.prev1[3,2] <- optWT$Pow1.prev1[2,2]
-###prev = c(.6,.3,.1)
-#N
-optWT$Pow1.prev2[1,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pow1",
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT$Pow1.prev2[2,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pow1", 
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT$Pow1.prev2[3,1] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pow1",
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-#ASN
-optWT$Pow1.prev2[1,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pow1",
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT$Pow1.prev2[2,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pow1",
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT$Pow1.prev2[3,2] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pow1",
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-
-
-#########################
-#gamma=c(1.25,1.25,1.25)
-#########################
-optWT125 <- list(PWP.prev1 = block.N.ASN, PWP.prev2 = block.N.ASN, 
-                 Pow1.prev1 = block.N.ASN, Pow1.prev2 = block.N.ASN)
-gamma125 <- c(1.25,1.25,1.25)
-#N
-optWT125$PWP.prev1[1,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pwp", gamma=gamma125,
-                                   search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT125$PWP.prev1[2,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pwp", gamma=gamma125,
-                                search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT125$PWP.prev1[3,1] <- optWT125$PWP.prev1[2,1]
-#ASN
-optWT125$PWP.prev1[1,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pwp",gamma=gamma125,
-                                search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT125$PWP.prev1[2,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pwp",gamma=gamma125,
-                                search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT125$PWP.prev1[3,2] <- optWT125$PWP.prev1[2,2] 
-###prev = c(.6,.3,.1)
-#N
-optWT125$PWP.prev2[1,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pwp", gamma=gamma125,
-                                search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT125$PWP.prev2[2,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pwp",gamma=gamma125,
-                                search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT125$PWP.prev2[3,1] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pwp",gamma=gamma125,
-                                search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-#ASN
-optWT125$PWP.prev2[1,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pwp",gamma=gamma125,
-                                search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT125$PWP.prev2[2,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pwp",gamma=gamma125,
-                                search.inteval.N = c(1,2000), search.interval.p =c(-1,1), opt.criterion = "ASNmin")
-optWT125$PWP.prev2[3,2] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pwp",gamma=gamma125,
-                                search.inteval.N = c(1,2000), search.interval.p =c(-1,1), opt.criterion = "ASNmin")
-
-####powertype Pow1:
-###prev = c(.4,.4,.2)
-#N
-optWT125$Pow1.prev1[1,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pow1", gamma=gamma125,
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT125$Pow1.prev1[2,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pow1",gamma=gamma125,
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT125$Pow1.prev1[3,1] <- optWT125$Pow1.prev1[2,1]
-#ASN
-optWT125$Pow1.prev1[1,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pow1",gamma=gamma125,
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT125$Pow1.prev1[2,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pow1",gamma=gamma125,
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT125$Pow1.prev1[3,2] <- optWT125$Pow1.prev1[2,2]
-###prev = c(.6,.3,.1)
-#N
-optWT125$Pow1.prev2[1,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pow1",gamma=gamma125,
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT125$Pow1.prev2[2,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pow1", gamma=gamma125,
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-optWT125$Pow1.prev2[3,1] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pow1",gamma=gamma125,
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "Nmin")
-#ASN
-optWT125$Pow1.prev2[1,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pow1",gamma=gamma125,
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT125$Pow1.prev2[2,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pow1",gamma=gamma125,
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-optWT125$Pow1.prev2[3,2] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pow1",gamma=gamma125,
-                                 search.inteval.N = c(1,2000), search.interval.p = c(-1,1), opt.criterion = "ASNmin")
-
-
-
-######################
-#####critES
-######################
-######################
-#gamma = c(1,1,1)
-######################
-#####critES
-####powertype PWP:
-###prev = c(.4,.4,.2)
-optES <- list(PWP.prev1 = block.N.ASN, PWP.prev2 = block.N.ASN, 
-              Pow1.prev1 = block.N.ASN, Pow1.prev2 = block.N.ASN)
-#N
-optES$PWP.prev1[1,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                             search.interval.p = c(-1,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES$PWP.prev1[2,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                search.interval.p = c(0,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES$PWP.prev1[3,1] <- optES$PWP.prev1[2,1]  
-#ASN
-optES$PWP.prev1[1,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                search.interval.p = c(-1,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES$PWP.prev1[2,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                search.interval.p = c(-1,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES$PWP.prev1[3,2] <- optES$PWP.prev1[2,2] 
-
-###prev = c(.6,.3,.1)
-#N
-optES$PWP.prev2[1,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                search.interval.p = c(-1,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES$PWP.prev2[2,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                search.interval.p = c(-1,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES$PWP.prev2[3,1] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                search.interval.p = c(-1,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-#ASN
-optES$PWP.prev2[1,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                search.interval.p = c(-1,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES$PWP.prev2[2,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                search.interval.p = c(-1,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES$PWP.prev2[3,2] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                search.interval.p = c(-1,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-
-####powertype Pow1:
-###prev = c(.4,.4,.2)
-#N
-optES$Pow1.prev1[1,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 search.interval.p = c(-1,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES$Pow1.prev1[2,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 search.interval.p = c(-1,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES$Pow1.prev1[3,1] <- optES$Pow1.prev1[2,1]  
-#ASN
-optES$Pow1.prev1[1,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 search.interval.p = c(-1,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES$Pow1.prev1[2,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 search.interval.p = c(-1,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES$Pow1.prev1[3,2] <- optES$Pow1.prev1[2,2]
-
-###prev = c(.6,.3,.1)
-#N
-optES$Pow1.prev2[1,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                search.interval.p = c(-1,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES$Pow1.prev2[2,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                search.interval.p = c(-1,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES$Pow1.prev2[3,1] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                search.interval.p = c(-1,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-#ASN
-optES$Pow1.prev2[1,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 search.interval.p = c(-1,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES$Pow1.prev2[2,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 search.interval.p = c(-1,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES$Pow1.prev2[3,2] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 search.interval.p = c(-1,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-
-#########################
-#gamma=c(1.25,1.25,1.25)
-#########################
-optES125 <- list(PWP.prev1 = block.N.ASN, PWP.prev2 = block.N.ASN, 
-              Pow1.prev1 = block.N.ASN, Pow1.prev2 = block.N.ASN)
-#N
-optES125$PWP.prev1[1,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES125$PWP.prev1[2,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES125$PWP.prev1[3,1] <- optES125$PWP.prev1[2,1]  
-#ASN
-optES125$PWP.prev1[1,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES125$PWP.prev1[2,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES125$PWP.prev1[3,2] <- optES125$PWP.prev1[2,2] 
-
-###prev = c(.6,.3,.1)
-#N
-optES125$PWP.prev2[1,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES125$PWP.prev2[2,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES125$PWP.prev2[3,1] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-#ASN
-optES125$PWP.prev2[1,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES125$PWP.prev2[2,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES125$PWP.prev2[3,2] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pwp", search.inteval.N = c(1,2000),
-                                gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-
-####powertype Pow1:
-###prev = c(.4,.4,.2)
-#N
-optES125$Pow1.prev1[1,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES125$Pow1.prev1[2,1] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES125$Pow1.prev1[3,1] <- optES125$Pow1.prev1[2,1]  
-#ASN
-optES125$Pow1.prev1[1,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,.2), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES125$Pow1.prev1[2,2] <- opt_par(prev=c(.4,.4,.2), delta=c(.2,0), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES125$Pow1.prev1[3,2] <- optES125$Pow1.prev1[2,2]
-
-###prev = c(.6,.3,.1)
-#N
-optES125$Pow1.prev2[1,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES125$Pow1.prev2[2,1] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-optES125$Pow1.prev2[3,1] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "Nmin", spendingfct = "Hwang")
-#ASN
-optES125$Pow1.prev2[1,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,.2), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES125$Pow1.prev2[2,2] <- opt_par(prev=c(.6,.3,.1), delta=c(.2,0), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-optES125$Pow1.prev2[3,2] <- opt_par(prev=c(.6,.3,.1), delta=c(0,.2), tau.option="overall", powertype = "pow1", search.inteval.N = c(1,2000),
-                                 gamma=gamma125, search.interval.p = c(-2,1), opt.criterion = "ASNmin", spendingfct = "Hwang")
-
 ###################
-#Latex-Table
+#Table Section 5
 ###################
-optWTtex<-round(rbind(cbind(optWT$PWP.prev1, optWT$PWP.prev2), cbind(optWT$Pow1.prev1, optWT$Pow1.prev2)),2)
-optWT125tex<-round(rbind(cbind(optWT125$PWP.prev1, optWT125$PWP.prev2), cbind(optWT125$Pow1.prev1, optWT125$Pow1.prev2)),2)
-optEStex<-round(rbind(cbind(optES$PWP.prev1, optES$PWP.prev2), cbind(optES$Pow1.prev1, optES$Pow1.prev2)),2)
-optES125tex<-round(rbind(cbind(optES125$PWP.prev1, optES125$PWP.prev2), cbind(optES125$Pow1.prev1, optES125$Pow1.prev2)),2)
-optcrittable <- rbind(cbind(optWTtex, optWT125tex), cbind(optEStex, optEStex))
-xtable(optcrittable)
+tabD1 <- as.data.frame(matrix(0, nr = 6, nc = 9))
+colnames(tabD1) <- c("pi{1}","pi{2}", "pi{1,2}", "c0", "c05", "N_PWP0", "N_PWP05", "N_Pow1_0", "N_Pow1_05")
+pr <- rbind(c(0.3,0.3,0.4),
+            c(0.35,0.35,0.3),
+            c(0.4, 0.4, 0.2),
+            c(0.4,0.2,0.4),
+            c(0.4,0.3,0.3),
+            c(0.6,0.2,0.2))
+tabD1[,1:3] <- pr 
+w <- 1/sqrt(c(2,2))
+delta <- c(0.3,0.3)
+for(i in 1:6){
+  pri <- pr[i,]
+  n <- rbind(pri,pri)
+  corr <- corrmat(prev = pri, w = w)
+  tabD1[i, 4] <- critWT(p=0, prev=pri, sigma = corr, n = n, tau.option = "overall")[1,1]
+  tabD1[i, 5] <- critWT(p=.5, prev=pri, sigma = corr, n = n, tau.option = "overall")[1,1]
+  tabD1[i, 6] <- Nroot(p=0, prev=pri, delta=delta, beta = 0.1, spendingfct = NULL, tau.option ="overall", powertype = "pwp")
+  tabD1[i, 7] <- Nroot(p=.5, prev=pri, delta=delta, beta = 0.1, spendingfct = NULL, tau.option ="overall", powertype = "pwp")
+  tabD1[i, 8] <- Nroot(p=0, prev=pri, delta=delta, beta = 0.1, spendingfct = NULL, tau.option ="overall", powertype = "pow1")
+  tabD1[i, 9] <- Nroot(p=.5, prev=pri, delta=delta, beta = 0.1, spendingfct = NULL, tau.option ="overall", powertype = "pow1")
+}
+tabD1[,4:5] <- round(tabD1[,4:5], 3)
+tabD1[,6:9] <- ceiling(tabD1[,6:9])
+tabD1
+
+xtable(x=tabD1, caption = "A caption", label = "tab: tabD1", digits = 3)
+
+
+
+
+
+
