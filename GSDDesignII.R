@@ -1,5 +1,5 @@
 #################################################
-#Design II - H_1 = {h_1, h_2}, H_2 = {H_{1,2}}
+#Design I - H_1 = {h_1, h_2}, H_2 = {H_{1,2}}
 #################################################
 library(multcomp)
 corrmat <- function(prev, w){
@@ -198,5 +198,37 @@ w = 1/sqrt(2)
 sigma = corrmat(prev=prev, w=w)
 crit <- critWT(p=0.5, prev=prev, sigma=sigma, tau = 1/2)
 crit2 <- critES(p=0.5, prev=prev, sigma=sigma, tau = 1/2, aspend = "Hwang")
+
+
+
+###################
+#Table Section 5
+###################
+tabD2 <- as.data.frame(matrix(0, nr = 6, nc = 9))
+colnames(tabD2) <- c("pi{1}","pi{2}", "pi{1,2}", "c0", "c05", "N_PWP0", "N_PWP05", "N_Pow1_0", "N_Pow1_05")
+pr <- rbind(c(0.3,0.3,0.4),
+            c(0.35,0.35,0.3),
+            c(0.4, 0.4, 0.2),
+            c(0.4,0.2,0.4),
+            c(0.4,0.3,0.3),
+            c(0.6,0.2,0.2))
+tabD2[,1:3] <- pr 
+w <- 1/sqrt(2)
+delta <- c(0.3,0.3,0.3)
+for(i in 1:6){
+  pri <- pr[i,]
+  corr <- corrmat(prev = pri, w = w)
+  tabD2[i, 4] <- critWT(p=0, prev=pri, sigma = corr, tau =0.5)[1]
+  tabD2[i, 5] <- critWT(p=.5, prev=pri, sigma = corr, tau =0.5)[1]
+  tabD2[i, 6] <- Nroot(p=0, prev=pri, delta=delta, beta = 0.1, spendingfct = NULL, tau =0.5, powertype = "pwp")
+  tabD2[i, 7] <- Nroot(p=.5, prev=pri, delta=delta, beta = 0.1, spendingfct = NULL, tau =0.5, powertype = "pwp")
+  tabD2[i, 8] <- Nroot(p=0, prev=pri, delta=delta, beta = 0.1, spendingfct = NULL, tau =0.5, powertype = "pow1")
+  tabD2[i, 9] <- Nroot(p=.5, prev=pri, delta=delta, beta = 0.1, spendingfct = NULL, tau =0.5, powertype = "pow1")
+}
+tabD2[,4:5] <- round(tabD2[,4:5], 3)
+tabD2[,6:9] <- ceiling(tabD2[,6:9])
+tabD2
+
+xtable(x=tabD2, caption = "A caption", label = "tab: tabD1", digits = 3)
 
 
