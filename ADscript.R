@@ -581,7 +581,7 @@ simAD <- function(Nsim, pops, prev, delta, knew = 2, seed = 321, theta_rel = the
         }
         names(res) <- namendr
         res[names(w)] <- ZsimD1_2[names(w)] >= critAD(oldD = D1, newD = newDAD1, knew=knew, zint = z_int[j,], decisionsold = dec_old[j,],
-                                             theta_rel=theta_rel, decisionsnew = dec_old[j,], oldCrit = oldCritD1, root.interval = c(-10,10))
+                                             theta_rel=theta_rel, decisionsnew = dec_old[j,], oldCrit = oldCritD1, root.interval = c(-10,10))[[2]]
       }
     }
     return(res)
@@ -627,7 +627,7 @@ simAD <- function(Nsim, pops, prev, delta, knew = 2, seed = 321, theta_rel = the
       names(res) <- namendr
       res["{1,2}"] <- w12[1]*z_int[j,"{1,2}"] + w12[2]*rnorm(1, delta[3]*sqrt(newDAD2$n[2,3])) >= 
                       critAD(oldD = D1, newD = newDAD2, knew=knew, zint = z_int[j,], decisionsold = dec_old[j,],
-                      theta_rel=theta_rel, decisionsnew = dec_old[j,], oldCrit = oldCritD1, root.interval = c(-10,10))
+                      theta_rel=theta_rel, decisionsnew = dec_old[j,], oldCrit = oldCritD1, root.interval = c(-10,10))[[2]]
     }
     return(res)
   }
@@ -684,7 +684,7 @@ simAD <- function(Nsim, pops, prev, delta, knew = 2, seed = 321, theta_rel = the
       }
       names(res) <- namendr
       res[whichJ] <- ZsimD3_2[whichJ] >= critAD(oldD = D1, newD = newDAD3, knew=knew, zint = z_int[j,], decisionsold = dec_old[j,],
-                                                theta_rel=theta_rel, decisionsnew = dec_old[j,], oldCrit = oldCritD1, root.interval = c(-10,10))
+                                                theta_rel=theta_rel, decisionsnew = dec_old[j,], oldCrit = oldCritD1, root.interval = c(-10,10))[[2]]
     }
     
     return(res)
@@ -776,7 +776,7 @@ simAD <- function(Nsim, pops, prev, delta, knew = 2, seed = 321, theta_rel = the
       names(res) <- namendr
       res[c(pop_ov, whichJ)] <- ZsimD4_2[c(pop_ov, whichJ)] >= 
                                 critAD(oldD = D1, newD = newDAD4, knew=knew, zint = z_int[j,], decisionsold = dec_old[j,],
-                                       theta_rel=theta_rel, decisionsnew = dec_old[j,], oldCrit = oldCritD1, root.interval = c(-10,10))
+                                       theta_rel=theta_rel, decisionsnew = dec_old[j,], oldCrit = oldCritD1, root.interval = c(-10,10))[[2]]
     }
     return(res)
   }
