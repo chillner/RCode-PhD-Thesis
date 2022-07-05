@@ -2,7 +2,7 @@
 #CRP principle with PWER-control
 ##################################
 source("GSDclassscript.R")
-source("GSDDesign")
+source("GSDDesignI") #to get Nroot function etc. (change to II or III to start with other design) 
 library(gtools) #to use functions that compute permutations/combinations
 library(doParallel) #to parallelize simulation runs
 library(mvtnorm)
