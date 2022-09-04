@@ -57,7 +57,7 @@ simul_sun <- function(Nsim = 10^4, cp, cf, alpha = 0.025, theta_A = 0.1, P, K, N
   theta <- numeric(K)
   f <- function(g){(1-tau)+2*tau*(g-1)/(K-K0-1)}
   #K0 (number of nulls):
-  K0 <- ifelse(((P*K) %% 1) == 0, P*K, sample(x = c(floor(P*K), ceiling(P*K)), size = 1, prob = c(ceiling(P*K)-P*K, P*K-floor(P*K))))
+  K0 <- P*K
   piGplus <- sum(piv[1:(K-K0)])
   thetaGplus <- theta_A/piGplus
   if(K0>=1){theta[(K-K0+1):K] <- 0}
